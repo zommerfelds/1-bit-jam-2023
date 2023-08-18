@@ -3670,17 +3670,35 @@ var State = $hxEnums["State"] = { __ename__:"State",__constructs__:null
 };
 State.__constructs__ = [State.WaitingForTouch,State.Playing,State.MissedBall,State.Dead];
 State.__empty_constructs__ = [State.WaitingForTouch,State.Playing,State.MissedBall,State.Dead];
+var Cell = $hxEnums["Cell"] = { __ename__:"Cell",__constructs__:null
+	,Empty: {_hx_name:"Empty",_hx_index:0,__enum__:"Cell",toString:$estr}
+	,Locked: {_hx_name:"Locked",_hx_index:1,__enum__:"Cell",toString:$estr}
+	,Falling: {_hx_name:"Falling",_hx_index:2,__enum__:"Cell",toString:$estr}
+};
+Cell.__constructs__ = [Cell.Empty,Cell.Locked,Cell.Falling];
+Cell.__empty_constructs__ = [Cell.Empty,Cell.Locked,Cell.Falling];
 var PlayView = function() {
 	this.b2World = new box2D_dynamics_B2World(new box2D_common_math_B2Vec2(0,10.0),true);
-	this.wallDefitition = [new h2d_col_Point(1,1),new h2d_col_Point(12,3),new h2d_col_Point(15,9),new h2d_col_Point(6,9),new h2d_col_Point(5,7),new h2d_col_Point(2,9)];
+	var _g = [];
+	var _g1 = 0;
+	var _g2 = PlayView.BOARD_WIDTH;
+	while(_g1 < _g2) {
+		++_g1;
+		var _g3 = [];
+		var _g4 = 0;
+		var _g5 = PlayView.BOARD_HEIGHT;
+		while(_g4 < _g5) {
+			++_g4;
+			_g3.push(Cell.Empty);
+		}
+		_g.push(_g3);
+	}
+	this.grid = _g;
+	this.timeSinceLastUpdate = 0.0;
 	this.resetText = new Text("");
 	this.points = 0;
 	this.pointsText = new Text("");
 	this.state = State.WaitingForTouch;
-	this.wallSize = 0.2;
-	this.ballVel = new h2d_col_Point();
-	this.ballSize = 0.5;
-	this.ball = new h2d_Graphics();
 	this.gameArea = new h2d_Graphics();
 	this.playHeight = 10;
 	this.playWidth = 16;
@@ -3688,9 +3706,6 @@ var PlayView = function() {
 };
 $hxClasses["PlayView"] = PlayView;
 PlayView.__name__ = "PlayView";
-PlayView.toB2Vec2 = function(pt) {
-	return new box2D_common_math_B2Vec2(pt.x,pt.y);
-};
 PlayView.__super__ = GameState;
 PlayView.prototype = $extend(GameState.prototype,{
 	init: function() {
@@ -3715,19 +3730,13 @@ PlayView.prototype = $extend(GameState.prototype,{
 			_this.posChanged = true;
 			_this.x = (this.width - this.playWidth * this.gameArea.scaleX) / 2;
 		}
-		this.gameArea.beginFill(3879604);
-		this.gameArea.drawRect(0,0,this.playWidth,this.playHeight);
 		this.addChild(this.gameArea);
-		this.initWalls();
-		this.ball.beginFill(16777215);
-		this.ball.drawRect(-this.ballSize / 2,-this.ballSize / 2,this.ballSize,this.ballSize);
-		this.gameArea.addChild(this.ball);
 		var _this = this.pointsText;
 		_this.posChanged = true;
 		_this.x = this.width * 0.5;
 		var _this = this.pointsText;
 		_this.posChanged = true;
-		_this.y = this.width * 0.02 + this.gameArea.y + this.wallSize * this.gameArea.scaleY;
+		_this.y = this.width * 0.02 + this.gameArea.y + this.gameArea.scaleY;
 		this.pointsText.set_textAlign(h2d_Align.Center);
 		this.addChild(this.pointsText);
 		this.setupGame();
@@ -3737,108 +3746,82 @@ PlayView.prototype = $extend(GameState.prototype,{
 		manager.masterChannelGroup.addEffect(new hxd_snd_effect_Reverb(hxd_snd_effect_ReverbPreset.DRUGGED));
 		manager.masterChannelGroup.addEffect(new hxd_snd_effect_Pitch(0.5));
 	}
-	,initWalls: function() {
-		var walls = new h2d_Graphics(this.gameArea);
-		walls.lineStyle(this.wallSize,16777215);
-		this.b2World.createBody(new box2D_dynamics_B2BodyDef());
-		var _g = 0;
-		var _g1 = this.wallDefitition;
-		while(_g < _g1.length) {
-			var def = _g1[_g];
-			++_g;
-			var x = def.x;
-			var y = def.y;
-			walls.addVertex(x,y,walls.curR,walls.curG,walls.curB,walls.curA,x * walls.ma + y * walls.mc + walls.mx,x * walls.mb + y * walls.md + walls.my);
-		}
-		var x = this.wallDefitition[0].x;
-		var y = this.wallDefitition[0].y;
-		walls.addVertex(x,y,walls.curR,walls.curG,walls.curB,walls.curA,x * walls.ma + y * walls.mc + walls.mx,x * walls.mb + y * walls.md + walls.my);
-		var _g = 0;
-		var _g1 = this.wallDefitition.length - 1;
-		while(_g < _g1) {
-			var i = _g++;
-			var fixture = new box2D_dynamics_B2FixtureDef();
-			fixture.density = 1;
-			fixture.shape = new box2D_collision_shapes_B2EdgeShape(PlayView.toB2Vec2(this.wallDefitition[i]),PlayView.toB2Vec2(this.wallDefitition[i + 1]));
-		}
-	}
 	,setupGame: function() {
 		this.resetText.set_visible(false);
 		this.points = 0;
-		var _this = this.ball;
-		_this.posChanged = true;
-		_this.x = 8;
-		var _this = this.ball;
-		_this.posChanged = true;
-		_this.y = 8;
 		this.state = State.WaitingForTouch;
+		this.grid[2][2] = Cell.Falling;
+		this.grid[2][3] = Cell.Falling;
+		this.grid[2][4] = Cell.Falling;
+		this.grid[3][4] = Cell.Falling;
+		this.grid[3][8] = Cell.Locked;
 	}
 	,onEvent: function(event) {
 		if(event.kind._hx_index == 0) {
 			if(this.state == State.WaitingForTouch) {
 				this.state = State.Playing;
-				this.setRandomBallVel();
 				hxd_Res.get_loader().loadCache("start.wav",hxd_res_Sound).play();
 			}
 		}
 	}
-	,setRandomBallVel: function() {
-		this.ballVel = new h2d_col_Point(0,-(3 + this.points));
-		var _this = this.ballVel;
-		var angle = (Math.random() - 0.5) * Math.PI * 0.8;
-		var c = Math.cos(angle);
-		var s = Math.sin(angle);
-		var y2 = _this.x * s + _this.y * c;
-		_this.x = _this.x * c - _this.y * s;
-		_this.y = y2;
-	}
 	,update: function(dt) {
 		this.b2World.step(dt,PlayView.BOX2D_VELOCITY_ITERATIONS,PlayView.BOX2D_POSITION_ITERATIONS);
 		this.b2World.clearForces();
+		this.timeSinceLastUpdate += dt;
+		while(this.timeSinceLastUpdate > 0.5) {
+			this.timeSinceLastUpdate -= 0.5;
+			this.tick();
+		}
+		this.gameArea.clear();
+		this.gameArea.beginFill(3879604);
+		this.gameArea.drawRect(0,0,this.playWidth,this.playHeight);
+		var _g = 0;
+		var _g1 = PlayView.BOARD_WIDTH;
+		while(_g < _g1) {
+			var x = _g++;
+			var _g2 = 0;
+			var _g3 = PlayView.BOARD_HEIGHT;
+			while(_g2 < _g3) {
+				var y = _g2++;
+				switch(this.grid[x][y]._hx_index) {
+				case 0:
+					break;
+				case 1:
+					this.gameArea.beginFill(12068773);
+					this.gameArea.drawRect(x,y,1,1);
+					break;
+				case 2:
+					this.gameArea.beginFill(3456633);
+					this.gameArea.drawRect(x,y,1,1);
+					break;
+				}
+			}
+		}
 		this.pointsText.set_text("" + this.points);
 		if(this.state == State.WaitingForTouch || this.state == State.Dead) {
 			return;
 		}
-		var fh = this.ball;
-		fh.posChanged = true;
-		fh.x += this.ballVel.x * dt;
-		var fh = this.ball;
-		fh.posChanged = true;
-		fh.y += this.ballVel.y * dt;
-		if(this.ball.y - this.ballSize * 0.5 < this.wallSize) {
-			var _this = this.ball;
-			_this.posChanged = true;
-			_this.y = this.wallSize + this.ballSize * 0.5;
-			this.ballVel.y *= -1;
-			this.points += 1;
-			hxd_Res.get_loader().loadCache("blip.wav",hxd_res_Sound).play();
-		}
-		if(this.ball.x - this.ballSize * 0.5 < this.wallSize) {
-			var _this = this.ball;
-			_this.posChanged = true;
-			_this.x = this.wallSize + this.ballSize * 0.5;
-			this.ballVel.x *= -1;
-			this.points += 1;
-			hxd_Res.get_loader().loadCache("blip.wav",hxd_res_Sound).play();
-		}
-		if(this.ball.x + this.ballSize * 0.5 > this.playWidth - this.wallSize) {
-			var _this = this.ball;
-			_this.posChanged = true;
-			_this.x = this.playWidth - this.wallSize - this.ballSize * 0.5;
-			this.ballVel.x *= -1;
-			this.points += 1;
-			hxd_Res.get_loader().loadCache("blip.wav",hxd_res_Sound).play();
-		}
-		if(this.ball.y + this.ballSize * 0.5 > this.playHeight - this.wallSize) {
-			var _this = this.ball;
-			_this.posChanged = true;
-			_this.y = this.playHeight - this.wallSize - this.ballSize * 0.5;
-			this.ballVel.y *= -1;
-			this.points += 1;
-			hxd_Res.get_loader().loadCache("blip.wav",hxd_res_Sound).play();
-		}
 		if(App.loadHighScore() < this.points) {
 			App.writeHighScore(this.points);
+		}
+	}
+	,tick: function() {
+		var _g = 0;
+		var _g1 = PlayView.BOARD_WIDTH;
+		while(_g < _g1) {
+			var x = _g++;
+			var y = PlayView.BOARD_HEIGHT - 1;
+			while(y >= 0) {
+				if(this.grid[x][y] == Cell.Falling) {
+					if(y == PlayView.BOARD_HEIGHT - 1 || this.grid[x][y + 1] == Cell.Locked) {
+						this.grid[x][y] = Cell.Locked;
+					} else {
+						this.grid[x][y + 1] = Cell.Falling;
+						this.grid[x][y] = Cell.Empty;
+					}
+				}
+				--y;
+			}
 		}
 	}
 	,__class__: PlayView
@@ -6811,23 +6794,6 @@ box2D_dynamics_B2Fixture.prototype = {
 		broadPhase.moveProxy(this.m_proxy,this.m_aabb,box2D_common_math_B2Math.subtractVV(transform2.position,transform1.position));
 	}
 	,__class__: box2D_dynamics_B2Fixture
-};
-var box2D_dynamics_B2FixtureDef = function() {
-	this.filter = new box2D_dynamics_B2FilterData();
-	this.shape = null;
-	this.userData = null;
-	this.friction = 0.2;
-	this.restitution = 0.0;
-	this.density = 0.0;
-	this.filter.categoryBits = 1;
-	this.filter.maskBits = 65535;
-	this.filter.groupIndex = 0;
-	this.isSensor = false;
-};
-$hxClasses["box2D.dynamics.B2FixtureDef"] = box2D_dynamics_B2FixtureDef;
-box2D_dynamics_B2FixtureDef.__name__ = "box2D.dynamics.B2FixtureDef";
-box2D_dynamics_B2FixtureDef.prototype = {
-	__class__: box2D_dynamics_B2FixtureDef
 };
 var box2D_dynamics_B2Island = function() {
 	this.m_jointCapacity = 0;
@@ -12292,23 +12258,6 @@ h2d_Graphics.prototype = $extend(h2d_Drawable.prototype,{
 		this.curG = (color >> 8 & 255) / 255.;
 		this.curB = (color & 255) / 255.;
 		this.doFill = true;
-	}
-	,lineStyle: function(size,color,alpha) {
-		if(alpha == null) {
-			alpha = 1.;
-		}
-		if(color == null) {
-			color = 0;
-		}
-		if(size == null) {
-			size = 0;
-		}
-		this.flush();
-		this.lineSize = size;
-		this.lineA = alpha;
-		this.lineR = (color >> 16 & 255) / 255.;
-		this.lineG = (color >> 8 & 255) / 255.;
-		this.lineB = (color & 255) / 255.;
 	}
 	,drawRect: function(x,y,w,h) {
 		this.flush();
@@ -48899,6 +48848,8 @@ HerbalTeaApp.avgRenderTime = 0.0;
 HerbalTeaApp.cutout = { top : 0, bottom : 0, left : 0, right : 0};
 h2d_Object.tmpPoint = new h2d_col_Point();
 h2d_HtmlText.REG_SPACES = new EReg("[\r\n\t ]+","g");
+PlayView.BOARD_WIDTH = 16;
+PlayView.BOARD_HEIGHT = 10;
 PlayView.BOX2D_VELOCITY_ITERATIONS = 8;
 PlayView.BOX2D_POSITION_ITERATIONS = 3;
 Xml.Element = 0;
